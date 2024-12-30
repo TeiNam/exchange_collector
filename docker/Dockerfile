@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     default-libmysqlclient-dev \
     build-essential \
     pkg-config \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # 타임존 설정
