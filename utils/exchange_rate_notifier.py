@@ -53,7 +53,7 @@ def main():
 
         # 1. Exchange Rate Collector 실행
         collector = ExchangeRateCollector(db_connector)
-        collector.collect_data()
+        collector.run()
         logger.info("환율 데이터를 성공적으로 수집했습니다.")
 
         # 2. Exchange Rate Visualizer 실행

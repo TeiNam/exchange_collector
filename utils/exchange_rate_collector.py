@@ -129,7 +129,7 @@ if __name__ == "__main__":
 
     try:
         # 테스트할 날짜를 직접 지정 (YYYYMMDD 형식)
-        search_date = '20241227'  # 여기에 원하는 날짜를 입력
+        search_date = '20241230'  # 여기에 원하는 날짜를 입력
 
         db_connector = MySQLConnector()
         collector = ExchangeRateCollector(db_connector, search_date=search_date)
