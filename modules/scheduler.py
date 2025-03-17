@@ -6,7 +6,10 @@ import threading
 from datetime import datetime
 import pytz
 from utils.exchange_rate_notifier import main as run_notifier
+from utils.work_journal_notifier import main as run_work_journal_notifier
 from utils.holiday_checker import HolidayChecker
+from utils.slack_comment_collector import SlackCommentCollector
+from modules.mysql_connector import MySQLConnector
 
 logger = logging.getLogger(__name__)
 
@@ -17,22 +20,34 @@ class SchedulerThread(threading.Thread):
     def __init__(self, run_immediately=False):
         super().__init__()
         self.is_running = False
-        self.schedule_time = "11:05"  # 노티파이어 실행 시간 (11:05 KST)
+        self.exchange_rate_time = "11:05"  # 환율 알림 실행 시간 (11:05 KST)
+        self.work_journal_time = "09:00"   # 업무일지 알림 실행 시간 (09:00 KST)
+        self.comment_collect_time = "23:00"  # 댓글 수집 실행 시간 (23:00 KST)
         self.run_immediately = run_immediately
 
     def run(self):
         self.is_running = True
 
-        # 스케줄 등록
-        schedule.every().day.at(self.schedule_time).do(run_notifier_job)
-        logger.info(f"노티파이어 스케줄 등록: {self.schedule_time} KST")
+        # 환율 알림 스케줄 등록
+        schedule.every().day.at(self.exchange_rate_time).do(run_notifier_job)
+        logger.info(f"환율 알림 스케줄 등록: {self.exchange_rate_time} KST")
+        
+        # 업무일지 작성 알림 스케줄 등록
+        schedule.every().day.at(self.work_journal_time).do(run_work_journal_job)
+        logger.info(f"업무일지 작성 알림 스케줄 등록: {self.work_journal_time} KST")
+        
+        # 댓글 수집 스케줄 등록 (매일 실행)
+        schedule.every().day.at(self.comment_collect_time).do(run_comment_collector_job)
+        logger.info(f"댓글 수집 스케줄 등록: {self.comment_collect_time} KST")
 
-        logger.info("노티파이어 스케줄러 시작됨")
-        logger.info(f"실행 시간: 매일 {self.schedule_time} KST")
+        logger.info("스케줄러 시작됨")
+        logger.info(f"환율 알림 실행 시간: 매일 {self.exchange_rate_time} KST")
+        logger.info(f"업무일지 작성 알림 실행 시간: 매일 {self.work_journal_time} KST (주말 및 공휴일 제외)")
+        logger.info(f"댓글 수집 실행 시간: 매일 {self.comment_collect_time} KST")
 
         # 옵션이 설정된 경우에만 즉시 실행
         if self.run_immediately:
-            logger.info("초기 노티파이어 실행")
+            logger.info("초기 환율 알림 실행")
             run_notifier_job()
 
         while self.is_running:
@@ -46,12 +61,12 @@ def is_weekend(date):
     """주말(토,일) 여부 확인"""
     return date.weekday() >= 5  # 5는 토요일, 6은 일요일
 
-def should_run_notifier(current_datetime):
-    """노티파이어 실행 여부 확인"""
+def should_run_task(current_datetime):
+    """작업 실행 여부 확인"""
     try:
         # 주말 체크
         if is_weekend(current_datetime):
-            logger.info(f"{current_datetime.strftime('%Y-%m-%d')}은 주말입니다. 노티파이어를 건너뜁니다.")
+            logger.info(f"{current_datetime.strftime('%Y-%m-%d')}은 주말입니다. 작업을 건너뜁니다.")
             return False
 
         # 공휴일 체크
@@ -59,37 +74,98 @@ def should_run_notifier(current_datetime):
         holiday_result = holiday_checker.check_holiday(current_datetime)
 
         if holiday_result['is_holiday']:
-            logger.info(f"{current_datetime.strftime('%Y-%m-%d')}은 {holiday_result['holiday_name']}입니다. 노티파이어를 건너뜁니다.")
+            logger.info(f"{current_datetime.strftime('%Y-%m-%d')}은 {holiday_result['holiday_name']}입니다. 작업을 건너뜁니다.")
             return False
 
         return True
 
     except Exception as e:
-        logger.error(f"노티파이어 실행 여부 확인 중 오류 발생: {str(e)}", exc_info=True)
+        logger.error(f"작업 실행 여부 확인 중 오류 발생: {str(e)}", exc_info=True)
         # 오류 발생 시 기본적으로 실행 시도
         return True
 
 def run_notifier_job():
-    """노티파이어 실행"""
+    """환율 알림 작업 실행"""
     try:
         current_datetime = datetime.now(KST)
-        logger.info(f"노티파이어 프로세스 시작: {current_datetime.strftime('%Y-%m-%d %H:%M')} KST")
+        logger.info(f"환율 알림 프로세스 시작: {current_datetime.strftime('%Y-%m-%d %H:%M')} KST")
 
         # 실행 여부 확인
-        if not should_run_notifier(current_datetime):
+        if not should_run_task(current_datetime):
             return {
                 "status": "skipped",
-                "message": "주말 또는 공휴일로 인해 노티파이어가 건너뛰어졌습니다."
+                "message": "주말 또는 공휴일로 인해 환율 알림이 건너뛰어졌습니다."
             }
 
         # 노티파이어 실행
         run_notifier()
 
-        logger.info("노티파이어 작업 완료")
-        return {"status": "success", "message": "노티파이어 작업 완료"}
+        logger.info("환율 알림 작업 완료")
+        return {"status": "success", "message": "환율 알림 작업 완료"}
 
     except Exception as e:
-        error_msg = f"노티파이어 실행 중 오류 발생: {str(e)}"
+        error_msg = f"환율 알림 실행 중 오류 발생: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {"status": "error", "message": error_msg}
+
+def run_work_journal_job():
+    """업무일지 작성 알림 작업 실행"""
+    try:
+        current_datetime = datetime.now(KST)
+        logger.info(f"업무일지 작성 알림 프로세스 시작: {current_datetime.strftime('%Y-%m-%d %H:%M')} KST")
+
+        # 실행 여부 확인
+        if not should_run_task(current_datetime):
+            return {
+                "status": "skipped",
+                "message": "주말 또는 공휴일로 인해 업무일지 작성 알림이 건너뛰어졌습니다."
+            }
+
+        # 업무일지 알림 실행
+        run_work_journal_notifier()
+
+        logger.info("업무일지 작성 알림 작업 완료")
+        return {"status": "success", "message": "업무일지 작성 알림 작업 완료"}
+
+    except Exception as e:
+        error_msg = f"업무일지 작성 알림 실행 중 오류 발생: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {"status": "error", "message": error_msg}
+
+def run_comment_collector_job():
+    """Slack 업무일지 댓글 수집 작업 실행"""
+    try:
+        current_datetime = datetime.now(KST)
+        logger.info(f"Slack 업무일지 댓글 수집 프로세스 시작: {current_datetime.strftime('%Y-%m-%d %H:%M')} KST")
+
+        # 댓글 수집 작업은 주말/공휴일에도 실행
+        
+        # DB 커넥터 초기화
+        db_connector = MySQLConnector()
+        
+        # 댓글 수집기 초기화
+        collector = SlackCommentCollector(db_connector)
+        
+        # 댓글 수집 (최근 2일 동안의 메시지만)
+        comments = collector.collect_recent_message_comments(days_back=2)
+        
+        # 결과 요약
+        total_messages = len(comments)
+        total_comments = sum(len(msg_comments) for msg_comments in comments.values())
+        
+        logger.info(f"업무일지 댓글 수집 완료: {total_messages}개 메시지에서 {total_comments}개 댓글 수집")
+        
+        # 리소스 정리
+        if db_connector:
+            db_connector.close()
+            
+        return {
+            "status": "success", 
+            "message": f"Slack 업무일지 댓글 수집 완료 ({total_messages}개 메시지, {total_comments}개 댓글)"
+        }
+
+    except Exception as e:
+        error_msg = f"Slack 업무일지 댓글 수집 중 오류 발생: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "message": error_msg}
 

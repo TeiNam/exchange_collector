@@ -88,13 +88,23 @@ def main():
 
         message_lines.extend([
             "",  # 빈 줄 추가
-            "3개월간의 환율 변동 그래프를 참고하세요."
+            "3개월간의 환율 변동 그래프를 참고하세요.",
+            "",
+            "💬 댓글로 다른 통화에 대한 정보를 요청하거나 피드백을 남겨주세요."
         ])
 
         # 메시지 전송
         message = "\n".join(message_lines)
-        if not slack.send_message(message, file_path=graph_path):
-            logger.error("Slack 메시지 전송 실패")
+        result = slack.send_message(
+            text=message, 
+            file_path=graph_path,
+            message_type="exchange_rate"
+        )
+        
+        if not result['success']:
+            logger.error(f"Slack 메시지 전송 실패: {result['error']}")
+        else:
+            logger.info(f"Slack 메시지 전송 성공 (메시지 ID: {result['message_id']})")
 
     except Exception as e:
         logger.error(f"스크립트 실행 중 오류 발생: {str(e)}", exc_info=True)

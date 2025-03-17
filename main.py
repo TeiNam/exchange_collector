@@ -27,15 +27,18 @@ def main():
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-        logger.info("환율 수집 서비스를 시작합니다.")
-        logger.info("스케줄: 매일 11:05 KST")
+        logger.info("자동화 서비스를 시작합니다.")
+        logger.info("환율 알림: 매일 11:05 KST")
+        logger.info("업무일지 작성 알림: 매일 09:00 KST (주말 및 공휴일 제외)")
+        logger.info("업무일지 댓글 수집: 매일 23:00 KST")
 
         # 스케줄러 시작 (초기 수집 없이)
         scheduler = setup_schedule(run_immediately=False)
 
         # 스케줄러 상태 출력
         status = get_scheduler_status()
-        logger.info(f"다음 실행 시간: {status['next_runs'][0]['next_run']}")
+        for job_status in status['next_runs']:
+            logger.info(f"{job_status['job']} - 다음 실행 시간: {job_status['next_run']}")
 
         # 메인 스레드 유지
         while True:
@@ -49,7 +52,7 @@ def main():
     finally:
         if 'scheduler' in locals():
             scheduler.stop()
-        logger.info("환율 수집 서비스를 종료합니다.")
+        logger.info("자동화 서비스를 종료합니다.")
 
 
 if __name__ == "__main__":
