@@ -146,7 +146,8 @@ def run_comment_collector_job():
         collector = SlackCommentCollector(db_connector)
 
         # 오늘 날짜의 업무일지 메시지 댓글 수집
-        comments = collector.collect_todays_workjournal_comments(days_back=1)
+        # collect_todays_workjournal_comments 대신 collect_recent_message_comments 호출
+        comments = collector.collect_recent_message_comments(days_back=1)
 
         # 결과 요약
         total_messages = len(comments)
