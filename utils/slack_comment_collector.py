@@ -302,12 +302,12 @@ class SlackCommentCollector:
 
         return comments
 
-    def collect_recent_message_comments(self, days_back: int = 7) -> Dict[str, List[Dict[str, Any]]]:
+    def collect_recent_message_comments(self, days_back: int = 1) -> Dict[str, List[Dict[str, Any]]]:
         """
-        최근 메시지의 댓글 수집
+        오늘 날짜의 업무일지 작성 알림 메시지에 달린 댓글만 수집
 
         Args:
-            days_back: 몇 일 전까지의 메시지를 검색할지 (기본 7일)
+            days_back: 몇 일 전까지의 댓글을 수집할지 (기본 1일)
 
         Returns:
             메시지별 댓글 목록 딕셔너리
@@ -315,12 +315,25 @@ class SlackCommentCollector:
         all_comments = {}
 
         try:
-            # 지정된 기간 이내의 채널 메시지 조회
-            oldest_time = time.time() - (days_back * 24 * 60 * 60)
+            # 오늘 날짜 계산
+            today = datetime.now().date()
+            today_start = datetime.combine(today, datetime.min.time())
+            today_end = datetime.combine(today, datetime.max.time())
 
+            # 오늘 날짜 문자열 (YYYY-MM-DD 형식)
+            today_str = today.strftime('%Y-%m-%d')
+
+            # Unix 타임스탬프로 변환
+            oldest_time = today_start.timestamp()
+            latest_time = today_end.timestamp()
+
+            logger.info(f"오늘({today_str}) 업무일지 작성 알림 메시지 및 댓글 수집 시작")
+
+            # 오늘 날짜의 채널 메시지 조회
             response = self.client.conversations_history(
                 channel=self.channel_id,
-                oldest=str(oldest_time)
+                oldest=str(oldest_time),
+                latest=str(latest_time)
             )
 
             if not response.get('ok'):
@@ -328,36 +341,41 @@ class SlackCommentCollector:
                 return all_comments
 
             messages = response.get('messages', [])
+            logger.info(f"오늘 전송된 메시지 {len(messages)}개 확인")
 
+            # 업무일지 작성 알림 메시지 찾기
+            workjournal_messages = []
             for message in messages:
-                # 봇 메시지이고 스레드 답글이 있는 경우만 처리
+                # 봇 메시지이고 스레드 답글이 있는 경우만 체크
                 if message.get('bot_id') and message.get('reply_count', 0) > 0:
-                    message_id = message.get('ts')
+                    message_text = message.get('text', '')
 
-                    # 메시지 유형 확인 (텍스트 기반으로 대략적인 유형 추정)
-                    message_text = message.get('text', '').lower()
-                    message_type = 'unknown'
+                    # 날짜와 "업무일지 작성 알림" 텍스트가 모두 포함되어 있는지 확인
+                    # 이모티콘이나 다른 텍스트가 있어도 무시하고 이 두 문자열만 확인
+                    if today_str in message_text and "업무일지 작성 알림" in message_text:
+                        workjournal_messages.append({
+                            'id': message.get('ts'),
+                            'text': message_text
+                        })
 
-                    if '환율' in message_text or 'exchange rate' in message_text:
-                        message_type = 'exchange_rate'
-                        # 환율 메시지 건너뛰기
-                        logger.debug(f"환율 관련 메시지({message_id})의 댓글은 수집하지 않습니다.")
-                        continue
-                    elif '업무일지' in message_text or 'work journal' in message_text:
-                        message_type = 'work_journal'
+            logger.info(f"오늘의 업무일지 작성 알림 메시지 {len(workjournal_messages)}개 확인")
 
-                    # 스레드 답글 수집
-                    comments = self.collect_thread_replies(
-                        message_id=message_id,
-                        parent_ts=message_id,
-                        message_type=message_type,
-                        days_back=days_back
-                    )
+            # 각 업무일지 메시지의 스레드 답글 수집
+            for message in workjournal_messages:
+                message_id = message['id']
 
-                    if comments:
-                        all_comments[message_id] = comments
+                # 스레드 답글 수집
+                comments = self.collect_thread_replies(
+                    message_id=message_id,
+                    parent_ts=message_id,
+                    message_type='work_journal',
+                    days_back=days_back
+                )
 
-            logger.info(f"{len(all_comments)}개의 메시지에서 댓글을 수집했습니다.")
+                if comments:
+                    all_comments[message_id] = comments
+
+            logger.info(f"오늘의 업무일지 작성 알림 메시지 {len(all_comments)}개에서 댓글을 수집했습니다.")
 
         except SlackApiError as e:
             logger.error(f"Slack API 오류: {str(e)}")

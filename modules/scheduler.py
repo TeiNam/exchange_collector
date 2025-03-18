@@ -132,36 +132,35 @@ def run_work_journal_job():
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "message": error_msg}
 
+
 def run_comment_collector_job():
-    """Slack 업무일지 댓글 수집 작업 실행"""
+    """오늘의 Slack 업무일지 댓글 수집 작업 실행"""
     try:
         current_datetime = datetime.now(KST)
-        logger.info(f"Slack 업무일지 댓글 수집 프로세스 시작: {current_datetime.strftime('%Y-%m-%d %H:%M')} KST")
+        logger.info(f"오늘의 Slack 업무일지 댓글 수집 프로세스 시작: {current_datetime.strftime('%Y-%m-%d %H:%M')} KST")
 
-        # 댓글 수집 작업은 주말/공휴일에도 실행
-        
         # DB 커넥터 초기화
         db_connector = MySQLConnector()
-        
+
         # 댓글 수집기 초기화
         collector = SlackCommentCollector(db_connector)
-        
-        # 댓글 수집 (최근 2일 동안의 메시지만)
-        comments = collector.collect_recent_message_comments(days_back=2)
-        
+
+        # 오늘 날짜의 업무일지 메시지 댓글 수집
+        comments = collector.collect_todays_workjournal_comments(days_back=1)
+
         # 결과 요약
         total_messages = len(comments)
         total_comments = sum(len(msg_comments) for msg_comments in comments.values())
-        
-        logger.info(f"업무일지 댓글 수집 완료: {total_messages}개 메시지에서 {total_comments}개 댓글 수집")
-        
+
+        logger.info(f"오늘의 업무일지 댓글 수집 완료: {total_messages}개 메시지에서 {total_comments}개 댓글 수집")
+
         # 리소스 정리
         if db_connector:
             db_connector.close()
-            
+
         return {
-            "status": "success", 
-            "message": f"Slack 업무일지 댓글 수집 완료 ({total_messages}개 메시지, {total_comments}개 댓글)"
+            "status": "success",
+            "message": f"오늘의 Slack 업무일지 댓글 수집 완료 ({total_messages}개 메시지, {total_comments}개 댓글)"
         }
 
     except Exception as e:
