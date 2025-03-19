@@ -488,6 +488,28 @@ class SlackCommentCollector:
             logger.error(f"날짜별 댓글 조회 중 오류 발생: {str(e)}", exc_info=True)
             return {}
 
+    def _format_content_with_numbers(self, content: str) -> str:
+        """
+        줄바꿈 형식의 내용에 번호를 붙여 포맷팅합니다.
+        
+        Args:
+            content: 줄바꿈으로 구분된 작업 내용
+            
+        Returns:
+            각 줄에 번호가 붙은 포맷팅된 텍스트
+        """
+        # 줄바꿈을 기준으로 내용을 분리
+        lines = content.strip().split('\n')
+        
+        # 빈 줄은 제외
+        lines = [line for line in lines if line.strip()]
+        
+        # 각 줄에 번호 붙이기
+        numbered_lines = [f"{i+1}. {line}" for i, line in enumerate(lines)]
+        
+        # 줄바꿈으로 다시 합치기
+        return '\n'.join(numbered_lines)
+
     def format_previous_workday_comments(self, comments_by_user: Dict[str, List[Dict[str, Any]]],
                                          previous_workday: datetime) -> str:
         """
@@ -513,12 +535,20 @@ class SlackCommentCollector:
             user_name = comments[0]['user_name']
             lines.append(f"\n👤 {user_name}")
 
-            for i, comment in enumerate(comments, 1):
+            for comment in comments:
                 content = comment['content']
                 # 긴 내용은 요약
                 if len(content) > 100:
                     content = content[:97] + "..."
-                lines.append(f"  {i}. {content}")
+                
+                # 줄바꿈이 있는 경우 각 줄에 번호를 붙여서 표시
+                if '\n' in content:
+                    # 각 줄에 번호 붙이기
+                    formatted_content = self._format_content_with_numbers(content)
+                    lines.append(f"  {formatted_content}")
+                else:
+                    # 줄바꿈이 없는 경우 기존 방식 유지
+                    lines.append(f"  1. {content}")
 
         return "\n".join(lines)
 
