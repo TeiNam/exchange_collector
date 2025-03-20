@@ -504,8 +504,22 @@ class SlackCommentCollector:
         # 빈 줄은 제외
         lines = [line for line in lines if line.strip()]
         
-        # 각 줄에 번호 붙이기
-        numbered_lines = [f"{i+1}. {line}" for i, line in enumerate(lines)]
+        # 각 줄에 번호 붙이기 - 모든 번호에 동일한 들여쓰기 적용
+        # 첫 번째 줄에는 1. 과 같이 표시, 나머지 줄에도 동일한 들여쓰기 적용
+        if not lines:
+            return ""
+        
+        # 첫 번째 줄에는 들여쓰기 없이 번호 붙이기
+        numbered_lines = [f"1. {lines[0]}"]
+        
+        # 두 번째 줄부터는 동일한 들여쓰기 적용 (첫 번째 줄의 들여쓰기 + 번호 길이에 맞춤)
+        # "1. "의 길이는 3이므로 나머지 줄도 3칸 들여쓰기를 맞춤
+        for i, line in enumerate(lines[1:], 2):
+            # 번호 길이를 계산하여 들여쓰기 추가
+            if i < 10:  # 한 자리 숫자 (1-9)
+                numbered_lines.append(f"{i}. {line}")
+            else:  # 두 자리 이상 숫자 (10+)
+                numbered_lines.append(f"{i}. {line}")
         
         # 줄바꿈으로 다시 합치기
         return '\n'.join(numbered_lines)
@@ -543,9 +557,13 @@ class SlackCommentCollector:
                 
                 # 줄바꿈이 있는 경우 각 줄에 번호를 붙여서 표시
                 if '\n' in content:
-                    # 각 줄에 번호 붙이기
+                    # 들여쓰기와 함께 번호 붙이기
                     formatted_content = self._format_content_with_numbers(content)
-                    lines.append(f"  {formatted_content}")
+                    # 추가 들여쓰기 적용 (2칸)
+                    indented_lines = []
+                    for line in formatted_content.split('\n'):
+                        indented_lines.append(f"  {line}")
+                    lines.append('\n'.join(indented_lines))
                 else:
                     # 줄바꿈이 없는 경우 기존 방식 유지
                     lines.append(f"  1. {content}")
