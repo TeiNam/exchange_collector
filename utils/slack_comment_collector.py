@@ -551,9 +551,6 @@ class SlackCommentCollector:
 
             for comment in comments:
                 content = comment['content']
-                # 긴 내용은 요약
-                if len(content) > 100:
-                    content = content[:97] + "..."
                 
                 # 줄바꿈이 있는 경우 각 줄에 번호를 붙여서 표시
                 if '\n' in content:
