@@ -1,5 +1,7 @@
 # Exchange Rate Collector
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/teinam)
+
 환율 정보를 수집하고, 기술적 지표를 분석하여 매수 신호와 함께 텔레그램으로 알림을 보내는 자동화 시스템입니다.
 
 ## 주요 기능
