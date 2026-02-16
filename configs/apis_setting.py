@@ -1,15 +1,17 @@
 # configs/apis_setting.py
 
 import os
+import logging
 from pathlib import Path
 from dotenv import load_dotenv
 
-# 프로젝트 루트 디렉토리 찾기
-BASE_DIR = Path(__file__).resolve().parent.parent
-env_path = os.path.join(BASE_DIR, '.env')
+logger = logging.getLogger(__name__)
 
-# .env 파일 로드
-load_dotenv(dotenv_path=env_path)
+# .env 파일이 있으면 로드 (로컬 개발용), 없으면 환경변수에서 직접 읽음 (도커)
+env_path = Path(__file__).resolve().parent.parent / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    logger.debug(f".env 파일 로드: {env_path}")
 
 # API 설정
 HOLIDAY_API_CONFIG = {
@@ -28,7 +30,3 @@ missing_vars = [var for var in required_vars if not os.getenv(var)]
 
 if missing_vars:
     raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
-
-# 디버깅을 위한 출력
-print(f"Loading .env from: {env_path}")
-print(f"Environment variables loaded: {list(os.environ.keys())}")

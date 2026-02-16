@@ -18,15 +18,13 @@ class TelegramSettings:
 
     def _initialize(self):
         """환경변수에서 텔레그램 설정 로드"""
-        # 프로젝트 루트 디렉토리 찾기
+        # .env 파일이 있으면 로드 (로컬 개발용), 없으면 환경변수에서 직접 읽음 (도커)
         project_root = Path(__file__).parent.parent
         env_path = project_root / '.env'
 
-        # .env 파일 로드
         if env_path.exists():
             load_dotenv(dotenv_path=env_path)
-        else:
-            logger.warning(f".env 파일을 찾을 수 없습니다: {env_path}")
+            logger.debug(f".env 파일 로드: {env_path}")
 
         # 텔레그램 설정 로드
         self.bot_token = self._get_env_value('TELEGRAM_BOT_TOKEN')
