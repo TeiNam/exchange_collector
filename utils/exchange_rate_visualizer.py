@@ -14,18 +14,35 @@ from modules.cleanup import FileCleaner
 
 logger = logging.getLogger(__name__)
 
-# 한글 폰트 설정 (macOS: Apple SD Gothic Neo, 없으면 Nanum Gothic)
-_korean_fonts = ['Apple SD Gothic Neo', 'Nanum Gothic', 'AppleGothic', 'Malgun Gothic']
-_font_set = False
-for _font_name in _korean_fonts:
-    if any(f.name == _font_name for f in fm.fontManager.ttflist):
-        plt.rcParams['font.family'] = _font_name
-        plt.rcParams['axes.unicode_minus'] = False  # 마이너스 기호 깨짐 방지
-        _font_set = True
-        logger.info(f"한글 폰트 설정: {_font_name}")
-        break
-if not _font_set:
+# 한글 폰트 설정
+def _setup_korean_font():
+    """시스템에서 한글 폰트를 찾아 matplotlib에 설정"""
+    import glob
+
+    # 1) 시스템 폰트 경로에서 나눔 폰트 직접 탐색 (도커 환경 대응)
+    nanum_paths = glob.glob('/usr/share/fonts/**/Nanum*.ttf', recursive=True)
+    if nanum_paths:
+        font_path = nanum_paths[0]
+        fm.fontManager.addfont(font_path)
+        font_prop = fm.FontProperties(fname=font_path)
+        plt.rcParams['font.family'] = font_prop.get_name()
+        plt.rcParams['axes.unicode_minus'] = False
+        logger.info(f"한글 폰트 설정 (파일): {font_path}")
+        return True
+
+    # 2) 등록된 폰트 목록에서 한글 폰트 탐색 (macOS/Windows)
+    korean_fonts = ['Apple SD Gothic Neo', 'Nanum Gothic', 'AppleGothic', 'Malgun Gothic']
+    for font_name in korean_fonts:
+        if any(f.name == font_name for f in fm.fontManager.ttflist):
+            plt.rcParams['font.family'] = font_name
+            plt.rcParams['axes.unicode_minus'] = False
+            logger.info(f"한글 폰트 설정: {font_name}")
+            return True
+
     logger.warning("한글 폰트를 찾을 수 없습니다. 그래프에서 한글이 깨질 수 있습니다.")
+    return False
+
+_setup_korean_font()
 
 
 class ExchangeRateVisualizer:

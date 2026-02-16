@@ -35,7 +35,8 @@ COPY --from=builder /install /usr/local
 # 애플리케이션 코드 복사
 COPY . .
 
-# 그래프 저장 디렉토리 생성
-RUN mkdir -p graph_files
+# 그래프 저장 디렉토리 생성 및 matplotlib 폰트 캐시 재생성
+RUN mkdir -p graph_files \
+    && python -c "import matplotlib.font_manager; matplotlib.font_manager._load_fontmanager(try_read_cache=False)"
 
 CMD ["python", "main.py"]
