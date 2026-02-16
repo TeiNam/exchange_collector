@@ -1,5 +1,13 @@
 # Exchange Rate Collector
 
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
+![Telegram](https://img.shields.io/badge/Telegram_Bot-22.6-26A5E4?logo=telegram&logoColor=white)
+![Matplotlib](https://img.shields.io/badge/Matplotlib-3.10-11557C)
+![Pandas](https://img.shields.io/badge/Pandas-2.2-150458?logo=pandas&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-FFDD00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/teinam)
 
 환율 정보를 수집하고, 기술적 지표를 분석하여 매수 신호와 함께 텔레그램으로 알림을 보내는 자동화 시스템입니다.
