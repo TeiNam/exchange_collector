@@ -6,9 +6,7 @@ fonttools==4.55.3
 idna==3.10
 kiwisolver==1.4.8
 matplotlib==3.10.0
-mysql==0.0.3
 mysql-connector-python==9.1.0
-mysqlclient==2.2.6
 numpy==2.2.1
 packaging==24.2
 pandas==2.2.3
@@ -16,10 +14,10 @@ pillow==11.0.0
 pyparsing==3.2.0
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
+python-telegram-bot==22.6
 pytz==2024.2
 requests==2.32.3
 schedule==1.2.2
 six==1.17.0
-slack_sdk==3.34.0
 tzdata==2024.2
 urllib3==2.3.0

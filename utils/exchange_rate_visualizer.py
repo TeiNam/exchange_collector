@@ -1,8 +1,10 @@
 # utils/exchange_rate_visualizer.py
 
 from pathlib import Path
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.font_manager as fm
 import pandas as pd
 from datetime import datetime, timedelta
 import logging
@@ -11,6 +13,19 @@ from modules.cleanup import FileCleaner
 
 
 logger = logging.getLogger(__name__)
+
+# 한글 폰트 설정 (macOS: Apple SD Gothic Neo, 없으면 Nanum Gothic)
+_korean_fonts = ['Apple SD Gothic Neo', 'Nanum Gothic', 'AppleGothic', 'Malgun Gothic']
+_font_set = False
+for _font_name in _korean_fonts:
+    if any(f.name == _font_name for f in fm.fontManager.ttflist):
+        plt.rcParams['font.family'] = _font_name
+        plt.rcParams['axes.unicode_minus'] = False  # 마이너스 기호 깨짐 방지
+        _font_set = True
+        logger.info(f"한글 폰트 설정: {_font_name}")
+        break
+if not _font_set:
+    logger.warning("한글 폰트를 찾을 수 없습니다. 그래프에서 한글이 깨질 수 있습니다.")
 
 
 class ExchangeRateVisualizer:
@@ -52,154 +67,213 @@ class ExchangeRateVisualizer:
             logger.error(f"데이터 조회 중 오류 발생: {str(e)}")
             raise
 
+    @staticmethod
+    def _compute_indicators(currency_df: pd.DataFrame) -> pd.DataFrame:
+        """통화 DataFrame에 기술적 지표 컬럼을 추가한다."""
+        df = currency_df.copy().sort_values('search_date').reset_index(drop=True)
+        prices = df['bkpr']
+
+        # 이동평균선 (5일, 20일)
+        df['ma5'] = prices.rolling(window=5).mean()
+        df['ma20'] = prices.rolling(window=20).mean()
+
+        # 볼린저 밴드 (20일, 2σ)
+        df['bb_mid'] = df['ma20']
+        rolling_std = prices.rolling(window=20).std(ddof=0)
+        df['bb_upper'] = df['bb_mid'] + 2 * rolling_std
+        df['bb_lower'] = df['bb_mid'] - 2 * rolling_std
+
+        # RSI (14일, Wilder 방식)
+        delta = prices.diff()
+        gain = delta.clip(lower=0)
+        loss = (-delta.clip(upper=0))
+        avg_gain = gain.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1 / 14, min_periods=14, adjust=False).mean()
+        rs = avg_gain / avg_loss
+        df['rsi'] = 100 - (100 / (1 + rs))
+
+        return df
+
+    def _plot_price_chart(self, ax, df: pd.DataFrame, label: str,
+                          main_color: str, bg_color: str, grid_color: str,
+                          y_margin: float = 20):
+        """환율 + MA + 볼린저 밴드 차트를 그린다."""
+        ax.set_facecolor(bg_color)
+
+        # 볼린저 밴드 영역
+        valid_bb = df.dropna(subset=['bb_upper', 'bb_lower'])
+        if not valid_bb.empty:
+            ax.fill_between(valid_bb['search_date'],
+                            valid_bb['bb_lower'], valid_bb['bb_upper'],
+                            alpha=0.10, color='#9CA3AF', label='볼린저 밴드')
+
+        # 환율 라인
+        ax.plot(df['search_date'], df['bkpr'],
+                color=main_color, linewidth=2, label=label, zorder=3)
+
+        # 이동평균선
+        ax.plot(df['search_date'], df['ma5'],
+                color='#EF4444', linewidth=1, alpha=0.8, label='MA5', zorder=2)
+        ax.plot(df['search_date'], df['ma20'],
+                color='#8B5CF6', linewidth=1, alpha=0.8, label='MA20', zorder=2)
+
+        # 최고/최저 포인트
+        idx_max = df['bkpr'].idxmax()
+        idx_min = df['bkpr'].idxmin()
+        row_max = df.loc[idx_max]
+        row_min = df.loc[idx_min]
+
+        ax.scatter(row_max['search_date'], row_max['bkpr'],
+                   color='#DC2626', s=50, zorder=5, edgecolors='white', linewidth=1.5)
+        ax.scatter(row_min['search_date'], row_min['bkpr'],
+                   color='#16A34A', s=50, zorder=5, edgecolors='white', linewidth=1.5)
+        ax.annotate(f'▲ {row_max["bkpr"]:,.0f}',
+                    xy=(row_max['search_date'], row_max['bkpr']),
+                    xytext=(0, 10), textcoords='offset points',
+                    fontsize=8, fontweight='bold', color='#DC2626', ha='center')
+        ax.annotate(f'▼ {row_min["bkpr"]:,.0f}',
+                    xy=(row_min['search_date'], row_min['bkpr']),
+                    xytext=(0, -14), textcoords='offset points',
+                    fontsize=8, fontweight='bold', color='#16A34A', ha='center')
+
+        # 최신값 표시
+        latest = df.iloc[-1]
+        ax.annotate(f'{latest["bkpr"]:,.0f}',
+                    xy=(latest['search_date'], latest['bkpr']),
+                    xytext=(8, 0), textcoords='offset points',
+                    fontsize=9, fontweight='bold', color=main_color, va='center')
+
+        # y축 범위
+        y_min = df['bkpr'].min() - y_margin
+        y_max = df['bkpr'].max() + y_margin
+        ax.set_ylim(y_min, y_max)
+
+        ax.set_ylabel(f'{label} (원)', fontsize=10, fontweight='bold', color=main_color)
+        ax.legend(loc='upper left', fontsize=7, framealpha=0.7)
+        ax.yaxis.grid(True, color=grid_color, linewidth=0.8)
+        ax.xaxis.grid(False)
+        ax.tick_params(axis='y', labelsize=8, colors='#374151')
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
+    @staticmethod
+    def _plot_rsi_chart(ax, df: pd.DataFrame, label: str,
+                        main_color: str, bg_color: str, grid_color: str):
+        """RSI 차트를 그린다."""
+        ax.set_facecolor(bg_color)
+
+        valid_rsi = df.dropna(subset=['rsi'])
+        if valid_rsi.empty:
+            ax.text(0.5, 0.5, 'RSI 데이터 부족', transform=ax.transAxes,
+                    ha='center', va='center', fontsize=10, color='#9CA3AF')
+            return
+
+        ax.plot(valid_rsi['search_date'], valid_rsi['rsi'],
+                color=main_color, linewidth=1.5)
+
+        # 과매수/과매도 기준선
+        ax.axhline(y=70, color='#DC2626', linewidth=0.8, linestyle='--', alpha=0.6)
+        ax.axhline(y=30, color='#16A34A', linewidth=0.8, linestyle='--', alpha=0.6)
+        ax.axhline(y=50, color='#9CA3AF', linewidth=0.5, linestyle=':', alpha=0.5)
+
+        # 과매수/과매도 영역 색칠
+        ax.fill_between(valid_rsi['search_date'], 70, 100, alpha=0.05, color='#DC2626')
+        ax.fill_between(valid_rsi['search_date'], 0, 30, alpha=0.05, color='#16A34A')
+
+        # 최신 RSI 값 표시
+        latest_rsi = valid_rsi.iloc[-1]['rsi']
+        ax.annotate(f'{latest_rsi:.1f}',
+                    xy=(valid_rsi.iloc[-1]['search_date'], latest_rsi),
+                    xytext=(8, 0), textcoords='offset points',
+                    fontsize=9, fontweight='bold', color=main_color, va='center')
+
+        ax.set_ylim(0, 100)
+        ax.set_ylabel(f'{label} RSI', fontsize=10, fontweight='bold', color=main_color)
+        ax.yaxis.grid(True, color=grid_color, linewidth=0.8)
+        ax.xaxis.grid(False)
+        ax.tick_params(axis='y', labelsize=8, colors='#374151')
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
     def create_visualization(self, months=3):
-        """환율 변동 그래프 생성"""
+        """환율 변동 + 기술적 지표 그래프 생성"""
         try:
-            # 날짜 범위 계산
+            # 날짜 범위 계산 (지표 계산용 여유분 포함)
             end_date = datetime.now().date()
-            start_date = end_date - timedelta(days=months * 31)
+            start_date = end_date - timedelta(days=months * 31 + 30)
 
             # 데이터 조회
             df = self.fetch_data_range(start_date, end_date)
             if df.empty:
-                logger.warning(f"해당 기간의 데이터가 없습니다.")
+                logger.warning("해당 기간의 데이터가 없습니다.")
                 return False
 
-            # 데이터가 있는 실제 날짜 범위 확인
-            actual_start_date = df['search_date'].min()
-            actual_end_date = df['search_date'].max()
+            # USD / JPY 분리 및 지표 계산
+            usd = self._compute_indicators(df[df['cur_unit'] == 'USD'])
+            jpy = self._compute_indicators(df[df['cur_unit'] == 'JPY(100)'])
 
-            # 데이터가 있는 날짜 범위에 대해서만 date_range 생성
-            date_range = pd.date_range(start=actual_start_date, end=actual_end_date, freq='D')
+            # 표시 범위 필터링 (지표 계산 후 원래 기간만 표시)
+            display_start = end_date - timedelta(days=months * 31)
+            usd = usd[usd['search_date'] >= pd.Timestamp(display_start)]
+            jpy = jpy[jpy['search_date'] >= pd.Timestamp(display_start)]
 
-            # USD와 JPY 데이터 분리
-            usd_data = df[df['cur_unit'] == 'USD']
-            jpy_data = df[df['cur_unit'] == 'JPY(100)']
+            actual_start = min(usd['search_date'].min(), jpy['search_date'].min())
+            actual_end = max(usd['search_date'].max(), jpy['search_date'].max())
 
-            # 그래프 생성
-            fig, ax1 = plt.subplots(figsize=(15, 8), facecolor='white')
-            ax1.set_facecolor('#f8f9fa')
+            # 색상 팔레트
+            usd_color = '#2563EB'
+            jpy_color = '#F59E0B'
+            bg_color = '#FAFBFC'
+            grid_color = '#E5E7EB'
 
-            # USD 그래프 (왼쪽 y축)
-            color1 = '#1f77b4'  # 파란색
-            ax1.set_xlabel('Date', fontsize=10)
-            ax1.set_ylabel('USD/KRW', color=color1, fontsize=10)
-            line1 = ax1.plot(usd_data['search_date'], usd_data['bkpr'],
-                             color=color1, label='USD/KRW', linewidth=2, marker='o', markersize=4)
-            ax1.tick_params(axis='y', labelcolor=color1)
+            # 4행 레이아웃: USD 환율, USD RSI, JPY 환율, JPY RSI (통화별 그룹)
+            fig, axes = plt.subplots(
+                4, 1, figsize=(12, 12), facecolor='white',
+                sharex=True,
+                gridspec_kw={'height_ratios': [3, 1, 3, 1], 'hspace': 0.12}
+            )
+            ax_usd, ax_rsi_usd, ax_jpy, ax_rsi_jpy = axes
 
-            # Y축 범위 설정
-            y1_min, y1_max = ax1.get_ylim()
-            y1_margin = (y1_max - y1_min) * 0.1
-            ax1.set_ylim(y1_min - y1_margin, y1_max + y1_margin)
+            # USD 환율 + MA + 볼린저 밴드
+            self._plot_price_chart(ax_usd, usd, 'USD/KRW',
+                                   usd_color, bg_color, grid_color, y_margin=20)
 
-            # USD 최고/최저 표시 (자동 위치 조정)
-            usd_max_idx = usd_data['bkpr'].idxmax()
-            usd_min_idx = usd_data['bkpr'].idxmin()
-            usd_max = usd_data.loc[usd_max_idx]
-            usd_min = usd_data.loc[usd_min_idx]
+            # USD RSI
+            self._plot_rsi_chart(ax_rsi_usd, usd, 'USD',
+                                 usd_color, bg_color, grid_color)
 
-            bbox_props = dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor=color1, alpha=0.7)
+            # JPY 환율 + MA + 볼린저 밴드
+            self._plot_price_chart(ax_jpy, jpy, 'JPY(100)/KRW',
+                                   jpy_color, bg_color, grid_color, y_margin=15)
 
-            # 최대값 주석 위치 조정
-            ax1.annotate(f'Max: {usd_max["bkpr"]}',
-                         xy=(usd_max['search_date'], usd_max['bkpr']),
-                         xytext=(0, -20), textcoords='offset points',
-                         color=color1, fontweight='bold',
-                         bbox=bbox_props,
-                         ha='center', va='bottom')
+            # JPY RSI
+            self._plot_rsi_chart(ax_rsi_jpy, jpy, 'JPY',
+                                 jpy_color, bg_color, grid_color)
 
-            # 최소값 주석 위치 조정
-            ax1.annotate(f'Min: {usd_min["bkpr"]}',
-                         xy=(usd_min['search_date'], usd_min['bkpr']),
-                         xytext=(0, 20), textcoords='offset points',
-                         color=color1, fontweight='bold',
-                         bbox=bbox_props,
-                         ha='center', va='top')
+            # x축 설정 (최하단)
+            ax_rsi_jpy.xaxis.set_major_locator(mdates.WeekdayLocator(byweekday=mdates.MO))
+            ax_rsi_jpy.xaxis.set_major_formatter(mdates.DateFormatter('%m/%d'))
+            ax_rsi_jpy.tick_params(axis='x', labelsize=8, rotation=0, colors='#374151')
 
-            # JPY 그래프 (오른쪽 y축)
-            ax2 = ax1.twinx()
-            color2 = '#ff7f0e'  # 주황색
-            ax2.set_ylabel('JPY(100)/KRW', color=color2, fontsize=10)
-            line2 = ax2.plot(jpy_data['search_date'], jpy_data['bkpr'],
-                             color=color2, label='JPY(100)/KRW', linewidth=2, marker='o', markersize=4)
-            ax2.tick_params(axis='y', labelcolor=color2)
+            # 제목
+            fig.suptitle(
+                f'환율 동향 + 기술적 지표  ({actual_start.strftime("%Y.%m.%d")} ~ {actual_end.strftime("%Y.%m.%d")})',
+                fontsize=13, fontweight='bold', color='#1F2937', y=0.99
+            )
 
-            # Y축 범위 설정 (JPY)
-            y2_min, y2_max = ax2.get_ylim()
-            y2_margin = (y2_max - y2_min) * 0.1
-            ax2.set_ylim(y2_min - y2_margin, y2_max + y2_margin)
+            plt.tight_layout(rect=[0, 0, 1, 0.97])
 
-            # JPY 최고/최저 표시
-            jpy_max_idx = jpy_data['bkpr'].idxmax()
-            jpy_min_idx = jpy_data['bkpr'].idxmin()
-            jpy_max = jpy_data.loc[jpy_max_idx]
-            jpy_min = jpy_data.loc[jpy_min_idx]
-
-            bbox_props2 = dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor=color2, alpha=0.7)
-
-            # 최대값 주석 위치 조정
-            ax2.annotate(f'Max: {jpy_max["bkpr"]}',
-                         xy=(jpy_max['search_date'], jpy_max['bkpr']),
-                         xytext=(0, -20), textcoords='offset points',
-                         color=color2, fontweight='bold',
-                         bbox=bbox_props2,
-                         ha='center', va='bottom')
-
-            # 최소값 주석 위치 조정
-            ax2.annotate(f'Min: {jpy_min["bkpr"]}',
-                         xy=(jpy_min['search_date'], jpy_min['bkpr']),
-                         xytext=(0, 20), textcoords='offset points',
-                         color=color2, fontweight='bold',
-                         bbox=bbox_props2,
-                         ha='center', va='top')
-
-            # 범례 추가
-            lines = line1 + line2
-            labels = [l.get_label() for l in lines]
-            ax1.legend(lines, labels, loc='upper left', frameon=True,
-                       facecolor='white', edgecolor='gray',
-                       bbox_to_anchor=(0.01, 0.99))
-
-            # 그리드 설정
-            ax1.yaxis.grid(True, linestyle='-', alpha=0.2)
-
-            # 모든 날짜에 대한 세로선 추가
-            for date in date_range:
-                ax1.axvline(x=date, color='gray', linestyle=':', alpha=0.2)
-
-            # x축 날짜 설정
-            ax1.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-            ax1.set_xticks(date_range)
-            x_labels = [date.strftime('%Y-%m-%d') for date in date_range]
-            ax1.set_xticklabels(x_labels, rotation=45, ha='right', fontsize=8)
-
-            # 그래프 제목 설정
-            plt.title(
-                f'Exchange Rate Trends\n({actual_start_date.strftime("%Y.%m.%d")} ~ {actual_end_date.strftime("%Y.%m.%d")})',
-                pad=20, fontsize=12, fontweight='bold')
-
-            # 테두리 설정
-            for spine in ax1.spines.values():
-                spine.set_visible(True)
-                spine.set_linewidth(0.5)
-                spine.set_color('#cccccc')
-
-            # 여백 조정
-            plt.tight_layout()
-
-            # 그래프 저장 경로 설정 및 저장
-            filename = f'exchange_rate_{actual_end_date.strftime("%Y%m%d")}.png'
+            # 저장
+            filename = f'exchange_rate_{actual_end.strftime("%Y%m%d")}.png'
             save_path = self.graph_dir / filename
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.savefig(save_path, dpi=150, bbox_inches='tight',
+                        facecolor='white', edgecolor='none')
             plt.close()
             logger.info(f"그래프가 저장되었습니다: {save_path}")
 
-            # 그래프 생성 후 오래된 파일 삭제
             self.clean_old_graph_files(days=3)
-            logger.info(f"오래된 그래프를 삭제하였습니다.")
+            logger.info("오래된 그래프를 삭제하였습니다.")
 
-            # Path 객체 반환 (bool 대신)
             return save_path
 
         except Exception as e:

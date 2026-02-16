@@ -19,7 +19,7 @@ HOLIDAY_API_CONFIG = {
 
 EXCHANGE_RATE_API_CONFIG = {
     'api_key': os.getenv('EXCHANGE_RATE_API_KEY'),
-    'base_url': 'https://www.koreaexim.go.kr/site/program/financial/exchangeJSON'
+    'base_url': 'https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON'
 }
 
 # 필수 환경변수 확인
