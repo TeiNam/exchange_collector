@@ -76,6 +76,11 @@ def main():
         yesterday = today - timedelta(days=1)
 
         today_rates = get_exchange_rates(db_connector, today)
+
+        if not today_rates:
+            logger.info("오늘의 환율 데이터가 없습니다 (공휴일/주말). 알림을 건너뜁니다.")
+            return
+
         yesterday_rates = get_exchange_rates(db_connector, yesterday)
 
         # 3. 7일간 환율 데이터로 스파크라인 생성
