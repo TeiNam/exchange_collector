@@ -9,7 +9,7 @@
 import logging
 from datetime import datetime, timedelta
 
-from telegram import BotCommand, Update
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from configs.telegram_setting import get_credentials
@@ -61,7 +61,11 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/rate - 금일 환율 조회\n\n"
         "하단 메뉴에서도 사용할 수 있어요 🙂"
     )
-    await update.message.reply_text(welcome_message, parse_mode="HTML")
+    # 후원하기 인라인 버튼
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("☕ 후원하기", url="https://buymeacoffee.com/teinam")]
+    ])
+    await update.message.reply_text(welcome_message, parse_mode="HTML", reply_markup=keyboard)
     logger.info(f"/start 명령어 처리 완료 (사용자: {update.effective_user.id})")
 
 
