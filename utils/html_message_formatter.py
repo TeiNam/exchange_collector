@@ -42,8 +42,14 @@ class HTMLMessageFormatter:
         # 제목 라인
         lines = [f'📊 <b>{date} 환율 정보</b>']
 
+        # 통화 표시 순서: USD → JPY → 나머지
+        display_order = ['USD', 'JPY(100)']
+        ordered_currencies = [c for c in display_order if c in rates]
+        ordered_currencies += [c for c in rates if c not in display_order]
+
         # 각 통화별 블록 생성
-        for currency, today_rate in rates.items():
+        for currency in ordered_currencies:
+            today_rate = rates[currency]
             yesterday_rate = yesterday_rates.get(currency)
             sparkline = sparklines.get(currency, '')
             block = self._format_currency_block(

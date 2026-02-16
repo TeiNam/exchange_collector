@@ -16,6 +16,7 @@ from configs.telegram_setting import get_credentials
 from modules.mysql_connector import MySQLConnector
 from utils.sparkline_generator import SparklineGenerator
 from utils.html_message_formatter import HTMLMessageFormatter
+from utils.exchange_rate_visualizer import ExchangeRateVisualizer
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,14 @@ async def rate_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         await update.message.reply_text(message, parse_mode="HTML")
+
+        # 그래프 생성 및 전송
+        visualizer = ExchangeRateVisualizer(db_connector)
+        graph_path = visualizer.create_visualization(months=3)
+        if graph_path:
+            with open(graph_path, 'rb') as photo:
+                await update.message.reply_photo(photo=photo)
+
         logger.info(f"/rate 명령어 처리 완료 (사용자: {update.effective_user.id})")
 
     except Exception as e:
