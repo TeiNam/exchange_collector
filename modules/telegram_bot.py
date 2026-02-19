@@ -63,7 +63,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     # 후원하기 인라인 버튼
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("☕ 후원하기", url="https://buymeacoffee.com/teinam")]
+        [InlineKeyboardButton("☕ 후원하기", url="https://qr.kakaopay.com/Ej74xpc815dc06149")]
     ])
     await update.message.reply_text(welcome_message, parse_mode="HTML", reply_markup=keyboard)
     logger.info(f"/start 명령어 처리 완료 (사용자: {update.effective_user.id})")
