@@ -24,8 +24,16 @@ EXCHANGE_RATE_API_CONFIG = {
     'base_url': 'https://oapi.koreaexim.go.kr/site/program/financial/exchangeJSON'
 }
 
+# 토스증권 Open API 설정 (USD 실시간 환율)
+TOSS_API_CONFIG = {
+    'client_id': os.getenv('TOSS_CLIENT_ID'),
+    'client_secret': os.getenv('TOSS_CLIENT_SECRET'),
+    'token_url': 'https://openapi.tossinvest.com/oauth2/token',
+    'base_url': 'https://openapi.tossinvest.com',
+}
+
 # 필수 환경변수 확인
-required_vars = ['HOLIDAY_API_KEY', 'EXCHANGE_RATE_API_KEY']
+required_vars = ['HOLIDAY_API_KEY', 'EXCHANGE_RATE_API_KEY', 'TOSS_CLIENT_ID', 'TOSS_CLIENT_SECRET']
 missing_vars = [var for var in required_vars if not os.getenv(var)]
 
 if missing_vars:

@@ -140,6 +140,47 @@ class IndicatorCalculator:
         return (lowest, num_days)
 
     @staticmethod
+    def disparity(prices: list[float], today_rate: float, period: int) -> float | None:
+        """
+        이격도(disparity) 계산
+
+        현재 환율이 장기 이동평균 대비 몇 %인지를 반환한다.
+        100이면 이동평균과 동일, 100 미만이면 평균보다 싸다는 의미.
+
+        Args:
+            prices: 최근 영업일 매매기준율 리스트 (오래된 순)
+            today_rate: 현재(오늘) 매매기준율
+            period: 이동평균 기간
+
+        Returns:
+            이격도(%) 또는 데이터 부족 시 None
+        """
+        ma = IndicatorCalculator.moving_average(prices, period)
+        if ma is None or ma == 0:
+            return None
+        return today_rate / ma * 100.0
+
+    @staticmethod
+    def percentile_rank(prices: list[float], today_rate: float) -> float | None:
+        """
+        백분위(percentile rank) 계산
+
+        주어진 기간 안에서 현재 환율이 하위 몇 %에 위치하는지를 반환한다.
+        0에 가까울수록 기간 내 최저가에 가깝다(= 싸다).
+
+        Args:
+            prices: 기간 내 매매기준율 리스트
+            today_rate: 현재(오늘) 매매기준율
+
+        Returns:
+            0~100 사이의 백분위 또는 데이터 없음 시 None
+        """
+        if not prices:
+            return None
+        below = sum(1 for p in prices if p < today_rate)
+        return below / len(prices) * 100.0
+
+    @staticmethod
     def detect_ma_cross(
         prices: list[float], short_period: int = 5, long_period: int = 20
     ) -> str | None:

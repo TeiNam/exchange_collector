@@ -79,8 +79,10 @@ class TestTelegramSettingsValidation:
             'TELEGRAM_CHAT_ID': 'valid-chat-id',
         }
 
-        # 기존 TELEGRAM_SEND_GRAPH 환경변수가 있을 수 있으므로 제거
-        with patch.dict(os.environ, env_vars, clear=False):
+        # 기존 TELEGRAM_SEND_GRAPH 환경변수가 있을 수 있으므로 제거.
+        # _initialize()가 load_dotenv()로 .env를 재주입하지 않도록 패치한다.
+        with patch.dict(os.environ, env_vars, clear=False), \
+                patch('configs.telegram_setting.load_dotenv'):
             os.environ.pop('TELEGRAM_SEND_GRAPH', None)
             instance = TelegramSettings()
             assert instance.send_graph is False

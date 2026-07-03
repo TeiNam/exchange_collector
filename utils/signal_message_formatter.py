@@ -10,15 +10,13 @@ from utils.buy_signal_analyzer import Signal
 class SignalMessageFormatter:
     """매수 신호 텔레그램 HTML 메시지 포맷터"""
 
-    # 신호 유형별 이모지 매핑
+    # 신호 유형별 이모지 매핑 (저가매기 신호)
     SIGNAL_EMOJI = {
-        "n_week_low": "📉",
-        "golden_cross": "✨",
-        "dead_cross": "⚠️",
-        "rsi_oversold": "🔋",
-        "rsi_overbought": "🔥",
+        "disparity_low": "🏷️",
+        "percentile_low": "📉",
         "bollinger_low": "📊",
-        "bollinger_high": "📈",
+        "n_month_low": "🧊",
+        "rsi_oversold": "🔋",
     }
 
     # 통화별 이모지

@@ -121,9 +121,9 @@ class TestGraphSendSettingParsing:
     """
 
     @given(
-        # 환경변수에 null 바이트(\x00)는 설정 불가하므로 제외
+        # 환경변수는 유효 UTF-8만 가능하므로 null 바이트와 서로게이트(Cs)를 제외
         send_graph_value=st.text(
-            alphabet=st.characters(blacklist_characters='\x00'),
+            alphabet=st.characters(blacklist_characters='\x00', blacklist_categories=('Cs',)),
             min_size=0,
             max_size=50,
         ),
@@ -140,7 +140,9 @@ class TestGraphSendSettingParsing:
             'TELEGRAM_SEND_GRAPH': send_graph_value,
         }
 
-        with patch.dict(os.environ, env_vars, clear=False):
+        # _initialize()가 load_dotenv()로 .env를 재주입하지 않도록 패치한다.
+        with patch.dict(os.environ, env_vars, clear=False), \
+                patch('configs.telegram_setting.load_dotenv'):
             instance = TelegramSettings()
 
             # "true" (대소문자 무관)일 때만 True, 그 외 모든 값은 False

@@ -18,10 +18,10 @@ from utils.signal_message_formatter import SignalMessageFormatter
 # 통화 코드 전략
 currency_strategy = st.sampled_from(["USD", "JPY(100)"])
 
-# 신호 유형 전략
+# 신호 유형 전략 (저가매기 신호)
 signal_type_strategy = st.sampled_from([
-    "n_week_low", "golden_cross", "dead_cross",
-    "rsi_oversold", "rsi_overbought", "bollinger_low", "bollinger_high",
+    "disparity_low", "percentile_low", "bollinger_low",
+    "n_month_low", "rsi_oversold",
 ])
 
 # 양수 환율 전략

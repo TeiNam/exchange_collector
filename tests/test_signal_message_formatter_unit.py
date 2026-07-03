@@ -36,13 +36,13 @@ class TestFormatSignalsEmpty:
 class TestFormatSignalsSingle:
     """단일 신호 포맷 확인 (Requirements 5.1, 5.2)"""
 
-    def test_single_usd_n_week_low_signal(self, formatter):
-        """USD N주 최저가 신호가 올바르게 포맷되는지 확인"""
+    def test_single_usd_n_month_low_signal(self, formatter):
+        """USD N개월 최저가 신호가 올바르게 포맷되는지 확인"""
         signals = [
             Signal(
                 currency="USD",
-                signal_type="n_week_low",
-                message="3주(15 영업일) 만에 최저가입니다. 매수를 고려해보세요",
+                signal_type="n_month_low",
+                message="약 3개월(66 영업일) 만의 최저가입니다 - 매수 적기",
                 current_rate=1425.00,
                 indicator_value=1425.00,
             )
@@ -59,8 +59,8 @@ class TestFormatSignalsSingle:
         # 현재 환율 포함 확인
         assert "1,425.00" in result
         # 신호 이모지 및 메시지 포함 확인
-        assert "📉" in result
-        assert "3주(15 영업일) 만에 최저가입니다" in result
+        assert "🧊" in result
+        assert "약 3개월(66 영업일) 만의 최저가입니다" in result
 
     def test_single_jpy_bollinger_low_signal(self, formatter):
         """JPY(100) 볼린저 밴드 하단 신호가 올바르게 포맷되는지 확인"""
@@ -85,21 +85,21 @@ class TestFormatSignalsSingle:
         assert "📊" in result
         assert "볼린저 밴드 하단" in result
 
-    def test_single_golden_cross_signal(self, formatter):
-        """골든크로스 신호의 이모지가 올바른지 확인"""
+    def test_single_disparity_low_signal(self, formatter):
+        """이격도 저평가 신호의 이모지가 올바른지 확인"""
         signals = [
             Signal(
                 currency="USD",
-                signal_type="golden_cross",
-                message="골든크로스 발생 - 단기 MA가 장기 MA를 상향 돌파",
+                signal_type="disparity_low",
+                message="60일 평균 대비 이격도 97.5% - 평소보다 저렴합니다",
                 current_rate=1400.00,
-                indicator_value=None,
+                indicator_value=97.5,
             )
         ]
         result = formatter.format_signals(signals)
 
-        assert "✨" in result
-        assert "골든크로스 발생" in result
+        assert "🏷️" in result
+        assert "이격도 97.5%" in result
 
     def test_single_rsi_oversold_signal(self, formatter):
         """RSI 과매도 신호가 올바르게 포맷되는지 확인"""
@@ -127,15 +127,15 @@ class TestFormatSignalsMultipleCurrencies:
         signals = [
             Signal(
                 currency="USD",
-                signal_type="n_week_low",
-                message="3주(15 영업일) 만에 최저가입니다. 매수를 고려해보세요",
+                signal_type="n_month_low",
+                message="약 3개월(66 영업일) 만의 최저가입니다 - 매수 적기",
                 current_rate=1425.00,
                 indicator_value=1425.00,
             ),
             Signal(
                 currency="JPY(100)",
                 signal_type="bollinger_low",
-                message="볼린저 밴드 하단(940.50) 터치 - 매수 신호",
+                message="볼린저 밴드 하단(940.50) 이하 - 단기 저평가 구간",
                 current_rate=945.00,
                 indicator_value=940.50,
             ),
@@ -156,22 +156,22 @@ class TestFormatSignalsMultipleCurrencies:
         signals = [
             Signal(
                 currency="USD",
-                signal_type="n_week_low",
-                message="4주(20 영업일) 만에 최저가입니다. 매수를 고려해보세요",
+                signal_type="n_month_low",
+                message="약 3개월(66 영업일) 만의 최저가입니다 - 매수 적기",
                 current_rate=1425.00,
                 indicator_value=1425.00,
             ),
             Signal(
                 currency="USD",
-                signal_type="golden_cross",
-                message="골든크로스 발생 - 단기 MA가 장기 MA를 상향 돌파",
+                signal_type="disparity_low",
+                message="60일 평균 대비 이격도 97.5% - 평소보다 저렴합니다",
                 current_rate=1425.00,
-                indicator_value=None,
+                indicator_value=97.5,
             ),
             Signal(
                 currency="USD",
                 signal_type="rsi_oversold",
-                message="RSI 28.5 - 과매도 구간, 반등 가능성",
+                message="RSI 28.5 - 과매도 구간, 반등 전 저점 가능성",
                 current_rate=1425.00,
                 indicator_value=28.5,
             ),
@@ -181,33 +181,33 @@ class TestFormatSignalsMultipleCurrencies:
         # 헤더는 한 번만 나와야 함
         assert result.count("💵") == 1
         # 세 가지 신호 이모지 모두 포함
-        assert "📉" in result
-        assert "✨" in result
+        assert "🧊" in result
+        assert "🏷️" in result
         assert "🔋" in result
 
-    def test_mixed_buy_and_warning_signals(self, formatter):
-        """매수 신호와 주의 신호가 혼합된 경우 모두 포맷되는지 확인"""
+    def test_multiple_low_signals_across_currencies(self, formatter):
+        """USD와 JPY 각각의 저가매기 신호가 모두 포맷되는지 확인"""
         signals = [
             Signal(
                 currency="USD",
-                signal_type="rsi_overbought",
-                message="RSI 75.0 - 과매수 구간, 주의 필요",
-                current_rate=1500.00,
-                indicator_value=75.0,
+                signal_type="percentile_low",
+                message="최근 89일 중 하위 15% 수준 - 저점 근처입니다",
+                current_rate=1400.00,
+                indicator_value=15.0,
             ),
             Signal(
                 currency="JPY(100)",
-                signal_type="dead_cross",
-                message="데드크로스 발생 - 단기 MA가 장기 MA를 하향 돌파",
-                current_rate=960.00,
-                indicator_value=None,
+                signal_type="bollinger_low",
+                message="볼린저 밴드 하단(940.50) 이하 - 단기 저평가 구간",
+                current_rate=940.00,
+                indicator_value=940.50,
             ),
         ]
         result = formatter.format_signals(signals)
 
-        # 주의 신호 이모지 확인
-        assert "🔥" in result
-        assert "⚠️" in result
+        # 각 신호 이모지 확인
+        assert "📉" in result
+        assert "📊" in result
         # 각 메시지 포함 확인
-        assert "과매수 구간" in result
-        assert "데드크로스 발생" in result
+        assert "저점 근처입니다" in result
+        assert "볼린저 밴드 하단" in result

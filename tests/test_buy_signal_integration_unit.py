@@ -34,6 +34,7 @@ def mock_dependencies():
         patch(f"{NOTIFIER_MODULE}.TelegramSender") as mock_telegram_cls,
         patch(f"{NOTIFIER_MODULE}.MySQLConnector") as mock_db_cls,
         patch(f"{NOTIFIER_MODULE}.ExchangeRateCollector") as mock_collector_cls,
+        patch(f"{NOTIFIER_MODULE}.TossUSDCollector") as mock_toss_collector_cls,
         patch(f"{NOTIFIER_MODULE}.get_exchange_rates") as mock_get_rates,
         patch(f"{NOTIFIER_MODULE}.get_weekly_rates") as mock_get_weekly,
         patch(f"{NOTIFIER_MODULE}.SparklineGenerator") as mock_sparkline_cls,
@@ -52,9 +53,10 @@ def mock_dependencies():
         mock_db = MagicMock()
         mock_db_cls.return_value = mock_db
 
-        # 환율 수집기
+        # 환율 수집기 (JPY=수출입은행, USD=토스)
         mock_collector = MagicMock()
         mock_collector_cls.return_value = mock_collector
+        mock_toss_collector_cls.return_value = MagicMock()
 
         # 환율 데이터 조회 (오늘/어제)
         mock_get_rates.return_value = {

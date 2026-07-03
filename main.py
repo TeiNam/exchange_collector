@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def main():
     try:
         logger.info("환율 수집 서비스를 시작합니다.")
-        logger.info("스케줄: 매일 14:00 KST (환율 알림 + 매수 신호 분석)")
+        logger.info("스케줄: 매일 15:40 KST (환율 수집 + 매수 신호 알림)")
 
         # 스케줄러 시작 (백그라운드 스레드)
         scheduler = setup_schedule(run_immediately=False)
