@@ -31,3 +31,8 @@ PARTITION BY RANGE COLUMNS(create_at) (
     PARTITION p202512 VALUES LESS THAN ('2026-01-01 00:00:00'),
     PARTITION p_max VALUES LESS THAN MAXVALUE
 );
+
+-- 매수 신호 분석 조회(WHERE cur_unit, search_date + 날짜별 최신행)용 복합 인덱스
+-- 기존 DB에는 다음을 수동 적용:
+--   CREATE INDEX idx_rates_cur_date ON exchange_rates (cur_unit, search_date, create_at);
+CREATE INDEX idx_rates_cur_date ON exchange_rates (cur_unit, search_date, create_at);

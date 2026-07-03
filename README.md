@@ -3,6 +3,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
 ![Telegram](https://img.shields.io/badge/Telegram_Bot-22.6-26A5E4?logo=telegram&logoColor=white)
+![Toss](https://img.shields.io/badge/Toss_Open_API-USD_FX-0064FF?logo=toss&logoColor=white)
 ![Matplotlib](https://img.shields.io/badge/Matplotlib-3.10-11557C)
 ![Pandas](https://img.shields.io/badge/Pandas-2.2-150458?logo=pandas&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
@@ -15,17 +16,19 @@
 ## 주요 기능
 
 ### 📊 환율 데이터 수집 및 알림
-- 한국수출입은행 API를 통한 USD/JPY 환율 수집
-- MySQL 데이터베이스 저장
-- 매일 오후 2:00(KST) 텔레그램 자동 알림 (평일, 공휴일 제외)
+- **하이브리드 수집**: USD는 토스증권 Open API(실시간), JPY(100)는 한국수출입은행 API
+- MySQL 데이터베이스 저장 (모든 날짜 기준은 KST로 통일)
+- 매일 오후 3:40(KST) 텔레그램 자동 알림 (평일, 공휴일 제외)
 - 유니코드 스파크라인으로 7일간 추세 표시
 
-### 📈 기술적 지표 분석 및 매수 신호
-- 이동평균선 (MA5, MA20) 및 골든크로스/데드크로스 감지
-- RSI (14일) 과매도/과매수 판별
-- 볼린저 밴드 (20일, 2σ) 상단/하단 터치 감지
-- N주 최저가 분석
-- 매수 타이밍 감지 시 즉시 텔레그램 알림
+### 📈 저가매수(저가매기) 신호 분석
+달러/엔화를 "싸게 사두려는" 실수요 관점의 신호만 판별합니다.
+- **이격도**: 60일 평균 대비 저평가 (임계값 98% 이하)
+- **백분위**: 최근 90일 중 하위 20% 이내 (저점권)
+- **볼린저 밴드**: 하단(20일, 2σ) 이하 터치
+- **N개월 최저가**: 과거 최저가 갱신
+- **RSI (14일)**: 과매도 구간 (참고 신호)
+- 매수 타이밍 감지 시 텔레그램 알림 (수집 알림과 함께 전송)
 
 ### 📉 데이터 시각화
 - 3개월간 환율 트렌드 그래프
@@ -36,6 +39,7 @@
 | 명령어 | 설명 |
 |--------|------|
 | `/start` | 시작 메시지 |
+| `/now` | USD 실시간 환율 (토스 API 직접 조회, DB 미저장) |
 | `/rate` | 금일 환율 조회 |
 | `/help` | 명령어 안내 |
 
@@ -54,15 +58,18 @@ exchange_collector/
 │   ├── telegram_bot.py       # 텔레그램 봇 명령어 핸들러
 │   └── telegram_sender.py    # 텔레그램 메시지 전송
 ├── utils/                    # 유틸리티
-│   ├── buy_signal_analyzer.py       # 매수 신호 분석기
-│   ├── exchange_rate_collector.py   # 환율 데이터 수집
-│   ├── exchange_rate_notifier.py    # 환율 알림 처리
+│   ├── buy_signal_analyzer.py       # 저가매수 신호 분석기
+│   ├── exchange_rate_collector.py   # JPY 수집 (한국수출입은행)
+│   ├── toss_exchange_client.py      # 토스 Open API 클라이언트 (토큰/조회)
+│   ├── toss_usd_collector.py        # USD 수집 (토스 실시간)
+│   ├── exchange_rate_notifier.py    # 환율 수집·알림 오케스트레이션
 │   ├── exchange_rate_visualizer.py  # 환율 시각화 (그래프)
 │   ├── holiday_checker.py           # 공휴일 체크
 │   ├── html_message_formatter.py    # HTML 메시지 포맷
 │   ├── indicator_calculator.py      # 기술적 지표 계산
 │   ├── signal_message_formatter.py  # 매수 신호 메시지 포맷
-│   └── sparkline_generator.py       # 스파크라인 생성
+│   ├── sparkline_generator.py       # 스파크라인 생성
+│   └── time_utils.py                # KST 기준 날짜/시각 유틸
 ├── tests/                    # 테스트 (단위 + 속성 기반)
 ├── docker/                   # Docker 설정
 │   ├── Dockerfile            # 멀티스테이지 빌드
@@ -90,8 +97,12 @@ TELEGRAM_CHAT_ID=your-chat-id
 TELEGRAM_SEND_GRAPH=true
 
 # API 키
-EXCHANGE_RATE_API_KEY=한국수출입은행-api-key
-HOLIDAY_API_KEY=공공데이터포털-api-key
+EXCHANGE_RATE_API_KEY=한국수출입은행-api-key   # JPY 수집
+HOLIDAY_API_KEY=공공데이터포털-api-key          # 공휴일 체크
+
+# 토스증권 Open API (USD 실시간 수집)
+TOSS_CLIENT_ID=your-toss-client-id
+TOSS_CLIENT_SECRET=your-toss-client-secret
 ```
 
 ### 로컬 실행
@@ -114,6 +125,8 @@ docker-compose up -d
 - Python 3.12
 - MySQL 8.0
 - python-telegram-bot
+- 토스증권 Open API (USD 실시간 환율, OAuth2)
+- 한국수출입은행 API (JPY 환율)
 - pandas, matplotlib
 - schedule
 - Docker (멀티스테이지 빌드)

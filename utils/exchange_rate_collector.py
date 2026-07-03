@@ -8,6 +8,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from urllib3.exceptions import InsecureRequestWarning
 from modules.mysql_connector import MySQLConnector
+from utils.time_utils import kst_today
 
 # InsecureRequestWarning 경고 숨기기
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -20,7 +21,8 @@ class ExchangeRateCollector:
     def __init__(self, db_connector, search_date=None):
         self.api_key = EXCHANGE_RATE_API_CONFIG['api_key']
         self.db_connector = db_connector
-        self.target_currencies = ['USD', 'JPY(100)']
+        # USD는 토스 API(TossUSDCollector)가 담당하므로 여기서는 JPY만 수집
+        self.target_currencies = ['JPY(100)']
         self.base_url = EXCHANGE_RATE_API_CONFIG['base_url']
         self.search_date = search_date  # 검색할 날짜 추가
 
@@ -43,8 +45,8 @@ class ExchangeRateCollector:
         if not self.api_key:
             raise ValueError("EXCHANGE_RATE_API_KEY가 설정되지 않았습니다.")
 
-        # search_date가 있으면 사용, 없으면 오늘 날짜 사용
-        search_date = self.search_date or datetime.now().strftime('%Y%m%d')
+        # search_date가 있으면 사용, 없으면 오늘 날짜 사용 (KST 기준)
+        search_date = self.search_date or kst_today().strftime('%Y%m%d')
 
         params = {
             'authkey': self.api_key,
@@ -85,7 +87,7 @@ class ExchangeRateCollector:
 
         try:
             # 검색 날짜를 DATE 타입으로 변환
-            search_date = datetime.strptime(self.search_date or datetime.now().strftime('%Y%m%d'), '%Y%m%d').date()
+            search_date = datetime.strptime(self.search_date or kst_today().strftime('%Y%m%d'), '%Y%m%d').date()
 
             connection = self.db_connector.get_connection()
             with connection.cursor() as cursor:

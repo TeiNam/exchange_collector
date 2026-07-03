@@ -7,8 +7,10 @@ from utils.sparkline_generator import SparklineGenerator
 from utils.html_message_formatter import HTMLMessageFormatter
 from utils.exchange_rate_visualizer import ExchangeRateVisualizer
 from utils.exchange_rate_collector import ExchangeRateCollector
+from utils.toss_usd_collector import TossUSDCollector
 from utils.buy_signal_analyzer import BuySignalAnalyzer
 from utils.signal_message_formatter import SignalMessageFormatter
+from utils.time_utils import kst_today
 from modules.mysql_connector import MySQLConnector
 
 logging.basicConfig(level=logging.INFO)
@@ -43,7 +45,7 @@ def get_weekly_rates(db_connector, currency, days=7):
     ORDER BY search_date ASC
     """
     try:
-        end_date = datetime.now().date()
+        end_date = kst_today()
         start_date = end_date - timedelta(days=days)
         connection = db_connector.get_connection()
         with connection.cursor() as cursor:
@@ -66,13 +68,19 @@ def main():
         db_connector = MySQLConnector()
         logger.info("DB Connector 초기화 완료")
 
-        # 1. Exchange Rate Collector 실행
-        collector = ExchangeRateCollector(db_connector)
-        collector.run()
-        logger.info("환율 데이터를 성공적으로 수집했습니다.")
+        # 1. 환율 수집 (USD=토스 실시간, JPY=수출입은행). 하나가 실패해도 다른 하나는 진행
+        try:
+            TossUSDCollector(db_connector).run()
+        except Exception as e:
+            logger.error(f"USD(토스) 수집 실패: {e}", exc_info=True)
+        try:
+            ExchangeRateCollector(db_connector).run()  # JPY(100)
+        except Exception as e:
+            logger.error(f"JPY(수출입은행) 수집 실패: {e}", exc_info=True)
+        logger.info("환율 데이터 수집 단계 완료.")
 
-        # 2. 오늘과 어제의 환율 정보 조회
-        today = datetime.now().date()
+        # 2. 오늘과 어제의 환율 정보 조회 (KST 기준)
+        today = kst_today()
         yesterday = today - timedelta(days=1)
 
         today_rates = get_exchange_rates(db_connector, today)
@@ -121,6 +129,9 @@ def main():
             ):
                 logger.error("텔레그램 그래프 이미지 전송 실패")
 
+        # 8. 매수 신호 분석 및 전송 (하루 1회이므로 알림과 함께 처리)
+        _send_buy_signals(db_connector, telegram, rates_for_formatter)
+
     except Exception as e:
         logger.error(f"스크립트 실행 중 오류 발생: {str(e)}", exc_info=True)
     finally:
@@ -128,50 +139,28 @@ def main():
             db_connector.close()
 
 
-def run_buy_signal_analysis() -> None:
+def _send_buy_signals(db_connector, telegram, rates_for_analysis: dict[str, float]) -> None:
     """
-    매수 신호 분석 후 신호가 있으면 즉시 텔레그램으로 전송한다.
-    스케줄러에서 평일 오후 2:40에 호출된다.
+    저가매기 매수 신호를 분석해 신호가 있으면 텔레그램으로 전송한다.
+
+    모든 신호 유형이 매수 관점이므로 별도 필터링은 하지 않는다.
+    분석/전송 중 오류가 나도 상위 알림 흐름을 막지 않도록 예외를 삼킨다.
     """
     try:
-        db_connector = MySQLConnector()
-        try:
-            today = datetime.now().date()
-            today_rates = get_exchange_rates(db_connector, today)
+        if not rates_for_analysis:
+            logger.warning("매수 신호 분석: 분석할 환율 데이터가 없습니다")
+            return
 
-            rates_for_analysis: dict[str, float] = {}
-            for currency, data in today_rates.items():
-                rates_for_analysis[currency] = data['deal_bas_r']
+        signals = BuySignalAnalyzer(db_connector).analyze(rates_for_analysis)
+        if not signals:
+            logger.info("매수 신호 분석 완료: 감지된 신호 없음")
+            return
 
-            if not rates_for_analysis:
-                logger.warning("매수 신호 분석: 오늘의 환율 데이터가 없습니다")
-                return
-
-            analyzer = BuySignalAnalyzer(db_connector)
-            signals = analyzer.analyze(rates_for_analysis)
-
-            if not signals:
-                logger.info("매수 신호 분석 완료: 감지된 신호 없음")
-                return
-
-            # 매수 신호만 필터링 (주의 신호 제외)
-            buy_signal_types = {"n_week_low", "golden_cross", "rsi_oversold", "bollinger_low"}
-            buy_signals = [s for s in signals if s.signal_type in buy_signal_types]
-
-            if not buy_signals:
-                logger.info("매수 신호 분석 완료: 매수 타이밍 신호 없음 (주의 신호만 감지)")
-                return
-
-            # 매수 신호가 있으면 즉시 전송
-            credentials = get_credentials()
-            telegram = TelegramSender(chat_id=credentials['chat_id'])
-            signal_msg = SignalMessageFormatter().format_signals(buy_signals)
-            if telegram.send_message(signal_msg, parse_mode='HTML'):
-                logger.info(f"매수 신호 메시지 전송 완료 ({len(buy_signals)}개 신호)")
-            else:
-                logger.error("매수 신호 텔레그램 메시지 전송 실패")
-        finally:
-            db_connector.close()
+        signal_msg = SignalMessageFormatter().format_signals(signals)
+        if telegram.send_message(signal_msg, parse_mode='HTML'):
+            logger.info(f"매수 신호 메시지 전송 완료 ({len(signals)}개 신호)")
+        else:
+            logger.error("매수 신호 텔레그램 메시지 전송 실패")
     except Exception as e:
         logger.error(f"매수 신호 분석 중 오류 발생: {str(e)}", exc_info=True)
 

@@ -290,3 +290,57 @@ class TestDetectMaCross:
         result = IndicatorCalculator.detect_ma_cross(prices, 5, 20)
         if result is not None:
             assert result == "dead_cross"
+
+
+# ============================================================
+# disparity 테스트
+# ============================================================
+class TestDisparity:
+    """이격도 계산 테스트"""
+
+    def test_insufficient_data_returns_none(self):
+        """이동평균 기간보다 데이터가 적으면 None을 반환한다"""
+        assert IndicatorCalculator.disparity([1400.0] * 5, 1400.0, 20) is None
+
+    def test_equal_to_average_returns_100(self):
+        """현재가가 이동평균과 같으면 이격도 100이다"""
+        prices = [1500.0] * 20
+        assert IndicatorCalculator.disparity(prices, 1500.0, 20) == pytest.approx(100.0)
+
+    def test_below_average_returns_under_100(self):
+        """현재가가 평균보다 낮으면 이격도가 100 미만이다"""
+        prices = [1500.0] * 20
+        # 1425 / 1500 * 100 = 95
+        assert IndicatorCalculator.disparity(prices, 1425.0, 20) == pytest.approx(95.0)
+
+    def test_above_average_returns_over_100(self):
+        """현재가가 평균보다 높으면 이격도가 100 초과다"""
+        prices = [1500.0] * 20
+        assert IndicatorCalculator.disparity(prices, 1575.0, 20) == pytest.approx(105.0)
+
+
+# ============================================================
+# percentile_rank 테스트
+# ============================================================
+class TestPercentileRank:
+    """백분위 계산 테스트"""
+
+    def test_empty_list_returns_none(self):
+        """빈 리스트는 None을 반환한다"""
+        assert IndicatorCalculator.percentile_rank([], 1400.0) is None
+
+    def test_lowest_value_returns_zero(self):
+        """모든 값보다 낮으면 백분위 0이다"""
+        prices = [1410.0, 1420.0, 1430.0, 1440.0, 1450.0]
+        assert IndicatorCalculator.percentile_rank(prices, 1400.0) == pytest.approx(0.0)
+
+    def test_highest_value_returns_100(self):
+        """모든 값보다 높으면 백분위 100이다"""
+        prices = [1410.0, 1420.0, 1430.0, 1440.0, 1450.0]
+        assert IndicatorCalculator.percentile_rank(prices, 1500.0) == pytest.approx(100.0)
+
+    def test_middle_value(self):
+        """5개 중 2개가 아래이면 백분위 40이다"""
+        prices = [1410.0, 1420.0, 1430.0, 1440.0, 1450.0]
+        # 1425보다 낮은 값: 1410, 1420 → 2/5 = 40%
+        assert IndicatorCalculator.percentile_rank(prices, 1425.0) == pytest.approx(40.0)
