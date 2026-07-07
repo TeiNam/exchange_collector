@@ -17,6 +17,10 @@ from modules.mysql_connector import MySQLConnector
 from utils.sparkline_generator import SparklineGenerator
 from utils.html_message_formatter import HTMLMessageFormatter
 from utils.exchange_rate_visualizer import ExchangeRateVisualizer
+from utils.gold_price_visualizer import GoldPriceVisualizer
+from utils.gold_message_formatter import GoldMessageFormatter
+from utils.gold_price_collector import GoldPriceCollector
+from utils.exchange_rate_notifier import get_latest_gold, get_weekly_gold
 from utils.toss_exchange_client import TossExchangeClient
 from utils.time_utils import kst_today
 
@@ -73,10 +77,12 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 매일 오후 3:40(KST)에 환율 정보와 저가매수 신호를 알려드립니다.\n"
         "🔴 빨간날엔 쉽니다.\n\n"
         "💵 달러(USD)\n"
-        "💴 엔화(JPY)\n\n"
+        "💴 엔화(JPY)\n"
+        "🥇 금시세(KRX)\n\n"
         "📌 <b>명령어 안내</b>\n"
         "/now - USD 실시간 환율\n"
-        "/rate - 금일 환율 조회\n\n"
+        "/rate - 금일 환율 조회\n"
+        "/gold - 금시세 조회\n\n"
         "하단 메뉴에서도 사용할 수 있어요 🙂"
     )
     # 후원하기 인라인 버튼
@@ -168,12 +174,52 @@ async def now_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ 실시간 환율 조회 중 오류가 발생했습니다.")
 
 
+async def gold_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/gold 명령어 핸들러 - 금시세 조회 (DB 최신값, 없으면 즉석 수집)"""
+    db_connector = None
+    try:
+        db_connector = MySQLConnector()
+
+        gold = get_latest_gold(db_connector)
+        if not gold:
+            # 데이터가 없으면 한 번 수집 시도
+            GoldPriceCollector(db_connector).run()
+            gold = get_latest_gold(db_connector)
+
+        if not gold:
+            await update.message.reply_text("📭 금시세 데이터가 없습니다.")
+            return
+
+        sparkline = SparklineGenerator.generate(get_weekly_gold(db_connector))
+        message = GoldMessageFormatter().format_message(
+            date=gold['search_date'].strftime('%Y-%m-%d'),
+            gold=gold,
+            sparkline=sparkline,
+        )
+        await update.message.reply_text(message, parse_mode="HTML")
+
+        graph_path = GoldPriceVisualizer(db_connector).create_visualization(months=3)
+        if graph_path:
+            with open(graph_path, 'rb') as photo:
+                await update.message.reply_photo(photo=photo)
+
+        logger.info(f"/gold 명령어 처리 완료 (사용자: {update.effective_user.id})")
+
+    except Exception as e:
+        logger.error(f"/gold 처리 중 오류: {e}", exc_info=True)
+        await update.message.reply_text("⚠️ 금시세 조회 중 오류가 발생했습니다.")
+    finally:
+        if db_connector:
+            db_connector.close()
+
+
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/help 명령어 핸들러"""
     help_message = (
         "📌 <b>명령어 안내</b>\n\n"
         "/now - ⚡ USD 실시간 환율 (토스)\n"
         "/rate - 💱 금일 환율 조회\n"
+        "/gold - 🥇 금시세 조회 (KRX)\n"
         "/help - ❓ 명령어 안내\n"
         "/start - 👋 시작 메시지\n\n"
         "📊 매일 오후 3:40(KST)에 환율 알림이 자동 전송됩니다.\n"
@@ -188,6 +234,7 @@ async def post_init(application: Application):
     commands = [
         BotCommand("now", "⚡ USD 실시간 환율"),
         BotCommand("rate", "💱 금일 환율 조회"),
+        BotCommand("gold", "🥇 금시세 조회"),
         BotCommand("help", "❓ 명령어 안내"),
         BotCommand("start", "👋 시작 메시지"),
     ]
@@ -206,6 +253,7 @@ def create_bot_application() -> Application:
     application.add_handler(CommandHandler("start", start_handler))
     application.add_handler(CommandHandler("now", now_handler))
     application.add_handler(CommandHandler("rate", rate_handler))
+    application.add_handler(CommandHandler("gold", gold_handler))
     application.add_handler(CommandHandler("help", help_handler))
 
     logger.info("텔레그램 봇 핸들러 등록 완료")
