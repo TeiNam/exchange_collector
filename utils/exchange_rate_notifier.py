@@ -8,6 +8,10 @@ from utils.html_message_formatter import HTMLMessageFormatter
 from utils.exchange_rate_visualizer import ExchangeRateVisualizer
 from utils.exchange_rate_collector import ExchangeRateCollector
 from utils.toss_usd_collector import TossUSDCollector
+from utils.gold_price_collector import GoldPriceCollector
+from utils.gold_price_visualizer import GoldPriceVisualizer
+from utils.gold_message_formatter import GoldMessageFormatter
+from utils.krx_gold_client import GOLD_1KG_ISU_CD
 from utils.buy_signal_analyzer import BuySignalAnalyzer
 from utils.signal_message_formatter import SignalMessageFormatter
 from utils.time_utils import kst_today
@@ -56,6 +60,53 @@ def get_weekly_rates(db_connector, currency, days=7):
         return []
 
 
+def get_latest_gold(db_connector):
+    """가장 최근 거래일의 금 99.99_1kg 종가 정보 조회"""
+    query = """
+    SELECT isu_nm, clsprc, cmpprevdd_prc, fluc_rt, search_date
+    FROM gold_prices
+    WHERE isu_cd = %s
+    ORDER BY search_date DESC
+    LIMIT 1
+    """
+    try:
+        connection = db_connector.get_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(query, (GOLD_1KG_ISU_CD,))
+            row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            'isu_nm': row[0],
+            'clsprc': float(row[1]),
+            'cmpprevdd_prc': float(row[2]),
+            'fluc_rt': float(row[3]),
+            'search_date': row[4],
+        }
+    except Exception as e:
+        logger.error(f"금시세 조회 중 오류 발생: {str(e)}")
+        return None
+
+
+def get_weekly_gold(db_connector, days=7):
+    """최근 N일간의 금 종가 조회 (스파크라인용)"""
+    query = """
+    SELECT clsprc
+    FROM gold_prices
+    WHERE isu_cd = %s AND search_date >= %s
+    ORDER BY search_date ASC
+    """
+    try:
+        start_date = kst_today() - timedelta(days=days)
+        connection = db_connector.get_connection()
+        with connection.cursor() as cursor:
+            cursor.execute(query, (GOLD_1KG_ISU_CD, start_date))
+            return [float(row[0]) for row in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"금시세 주간 조회 중 오류 발생: {str(e)}")
+        return []
+
+
 def main():
     """환율 데이터 수집, 시각화 및 알림을 처리하는 노티파이어"""
     try:
@@ -77,7 +128,11 @@ def main():
             ExchangeRateCollector(db_connector).run()  # JPY(100)
         except Exception as e:
             logger.error(f"JPY(수출입은행) 수집 실패: {e}", exc_info=True)
-        logger.info("환율 데이터 수집 단계 완료.")
+        try:
+            GoldPriceCollector(db_connector).run()  # KRX 금시세
+        except Exception as e:
+            logger.error(f"금시세(KRX) 수집 실패: {e}", exc_info=True)
+        logger.info("환율/금시세 데이터 수집 단계 완료.")
 
         # 2. 오늘과 어제의 환율 정보 조회 (KST 기준)
         today = kst_today()
@@ -86,7 +141,9 @@ def main():
         today_rates = get_exchange_rates(db_connector, today)
 
         if not today_rates:
-            logger.info("오늘의 환율 데이터가 없습니다 (공휴일/주말). 알림을 건너뜁니다.")
+            logger.info("오늘의 환율 데이터가 없습니다 (공휴일/주말). 환율 알림을 건너뜁니다.")
+            # 환율이 없어도 금시세는 별도로 전송 시도 (시장 휴일이 다를 수 있음)
+            _send_gold(db_connector, telegram)
             return
 
         yesterday_rates = get_exchange_rates(db_connector, yesterday)
@@ -132,6 +189,9 @@ def main():
         # 8. 매수 신호 분석 및 전송 (하루 1회이므로 알림과 함께 처리)
         _send_buy_signals(db_connector, telegram, rates_for_formatter)
 
+        # 9. 금시세 알림 및 그래프 전송
+        _send_gold(db_connector, telegram)
+
     except Exception as e:
         logger.error(f"스크립트 실행 중 오류 발생: {str(e)}", exc_info=True)
     finally:
@@ -163,6 +223,33 @@ def _send_buy_signals(db_connector, telegram, rates_for_analysis: dict[str, floa
             logger.error("매수 신호 텔레그램 메시지 전송 실패")
     except Exception as e:
         logger.error(f"매수 신호 분석 중 오류 발생: {str(e)}", exc_info=True)
+
+
+def _send_gold(db_connector, telegram) -> None:
+    """금시세 메시지와 그래프를 전송한다. 오류가 나도 상위 흐름을 막지 않는다."""
+    try:
+        gold = get_latest_gold(db_connector)
+        if not gold:
+            logger.info("금시세 데이터가 없습니다. 금 알림을 건너뜁니다.")
+            return
+
+        sparkline = SparklineGenerator.generate(get_weekly_gold(db_connector))
+        message = GoldMessageFormatter().format_message(
+            date=gold['search_date'].strftime('%Y-%m-%d'),
+            gold=gold,
+            sparkline=sparkline,
+        )
+        if not telegram.send_message(message, parse_mode='HTML'):
+            logger.error("금시세 텔레그램 메시지 전송 실패")
+
+        if is_send_graph_enabled():
+            graph_path = GoldPriceVisualizer(db_connector).create_visualization(months=3)
+            if graph_path and not telegram.send_message(
+                "🥇 3개월간 금시세 변동 그래프", file_path=graph_path
+            ):
+                logger.error("금시세 그래프 이미지 전송 실패")
+    except Exception as e:
+        logger.error(f"금시세 알림 처리 중 오류 발생: {str(e)}", exc_info=True)
 
 
 if __name__ == "__main__":

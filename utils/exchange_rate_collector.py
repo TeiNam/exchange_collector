@@ -21,8 +21,8 @@ class ExchangeRateCollector:
     def __init__(self, db_connector, search_date=None):
         self.api_key = EXCHANGE_RATE_API_CONFIG['api_key']
         self.db_connector = db_connector
-        # USD는 토스 API(TossUSDCollector)가 담당하므로 여기서는 JPY만 수집
-        self.target_currencies = ['JPY(100)']
+        # USD는 토스 API(TossUSDCollector)가 담당. JPY는 알림/그래프용, EUR은 수집만.
+        self.target_currencies = ['JPY(100)', 'EUR']
         self.base_url = EXCHANGE_RATE_API_CONFIG['base_url']
         self.search_date = search_date  # 검색할 날짜 추가
 

@@ -42,6 +42,8 @@ def mock_dependencies():
         patch(f"{NOTIFIER_MODULE}.is_send_graph_enabled") as mock_graph_enabled,
         patch(f"{NOTIFIER_MODULE}.BuySignalAnalyzer") as mock_analyzer_cls,
         patch(f"{NOTIFIER_MODULE}.SignalMessageFormatter") as mock_signal_fmt_cls,
+        # 금시세 알림은 별도 관심사 → 이 테스트에서는 no-op으로 격리
+        patch(f"{NOTIFIER_MODULE}._send_gold") as mock_send_gold,
     ):
         # 텔레그램 설정
         mock_get_creds.return_value = {"chat_id": "test_chat_id"}

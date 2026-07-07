@@ -4,6 +4,7 @@
 ![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1?logo=mysql&logoColor=white)
 ![Telegram](https://img.shields.io/badge/Telegram_Bot-22.6-26A5E4?logo=telegram&logoColor=white)
 ![Toss](https://img.shields.io/badge/Toss_Open_API-USD_FX-0064FF?logo=toss&logoColor=white)
+![KRX](https://img.shields.io/badge/KRX_Open_API-Gold-C9A227)
 ![Matplotlib](https://img.shields.io/badge/Matplotlib-3.10-11557C)
 ![Pandas](https://img.shields.io/badge/Pandas-2.2-150458?logo=pandas&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)
@@ -20,6 +21,11 @@
 - MySQL 데이터베이스 저장 (모든 날짜 기준은 KST로 통일)
 - 매일 오후 3:40(KST) 텔레그램 자동 알림 (평일, 공휴일 제외)
 - 유니코드 스파크라인으로 7일간 추세 표시
+
+### 🥇 금시세 수집 및 알림
+- **KRX 금시장 Open API**: 금 99.99_1kg 일별매매정보(종가, 원/g)를 매일 수집·저장
+- 환율 알림과 함께 금시세 메시지 + 3개월 그래프(MA·볼린저·RSI) 전송
+- KRX 종가 제공 특성상 데이터가 없으면 최근 거래일까지 소급 조회
 
 ### 📈 저가매수(저가매기) 신호 분석
 달러/엔화를 "싸게 사두려는" 실수요 관점의 신호만 판별합니다.
@@ -41,6 +47,7 @@
 | `/start` | 시작 메시지 |
 | `/now` | USD 실시간 환율 (토스 API 직접 조회, DB 미저장) |
 | `/rate` | 금일 환율 조회 |
+| `/gold` | 금시세 조회 (KRX, 금 99.99_1kg) |
 | `/help` | 명령어 안내 |
 
 ## 프로젝트 구조
@@ -62,7 +69,11 @@ exchange_collector/
 │   ├── exchange_rate_collector.py   # JPY 수집 (한국수출입은행)
 │   ├── toss_exchange_client.py      # 토스 Open API 클라이언트 (토큰/조회)
 │   ├── toss_usd_collector.py        # USD 수집 (토스 실시간)
-│   ├── exchange_rate_notifier.py    # 환율 수집·알림 오케스트레이션
+│   ├── krx_gold_client.py           # KRX 금시장 Open API 클라이언트
+│   ├── gold_price_collector.py      # 금시세 수집·저장
+│   ├── gold_price_visualizer.py     # 금시세 시각화 (그래프)
+│   ├── gold_message_formatter.py    # 금시세 메시지 포맷
+│   ├── exchange_rate_notifier.py    # 환율·금시세 수집·알림 오케스트레이션
 │   ├── exchange_rate_visualizer.py  # 환율 시각화 (그래프)
 │   ├── holiday_checker.py           # 공휴일 체크
 │   ├── html_message_formatter.py    # HTML 메시지 포맷
@@ -103,6 +114,9 @@ HOLIDAY_API_KEY=공공데이터포털-api-key          # 공휴일 체크
 # 토스증권 Open API (USD 실시간 수집)
 TOSS_CLIENT_ID=your-toss-client-id
 TOSS_CLIENT_SECRET=your-toss-client-secret
+
+# KRX 금시장 Open API (금시세 수집)
+KRX_API_KEY=krx-open-api-key
 ```
 
 ### 로컬 실행
@@ -127,6 +141,7 @@ docker-compose up -d
 - python-telegram-bot
 - 토스증권 Open API (USD 실시간 환율, OAuth2)
 - 한국수출입은행 API (JPY 환율)
+- KRX 금시장 Open API (금 99.99 금시세)
 - pandas, matplotlib
 - schedule
 - Docker (멀티스테이지 빌드)

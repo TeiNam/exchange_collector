@@ -32,8 +32,14 @@ TOSS_API_CONFIG = {
     'base_url': 'https://openapi.tossinvest.com',
 }
 
+# KRX 금시장 Open API 설정 (금 99.99 일별매매정보)
+KRX_API_CONFIG = {
+    'api_key': os.getenv('KRX_API_KEY'),
+    'base_url': 'https://data-dbg.krx.co.kr/svc/apis/gen/gold_bydd_trd',
+}
+
 # 필수 환경변수 확인
-required_vars = ['HOLIDAY_API_KEY', 'EXCHANGE_RATE_API_KEY', 'TOSS_CLIENT_ID', 'TOSS_CLIENT_SECRET']
+required_vars = ['HOLIDAY_API_KEY', 'EXCHANGE_RATE_API_KEY', 'TOSS_CLIENT_ID', 'TOSS_CLIENT_SECRET', 'KRX_API_KEY']
 missing_vars = [var for var in required_vars if not os.getenv(var)]
 
 if missing_vars:

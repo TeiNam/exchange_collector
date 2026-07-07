@@ -36,3 +36,26 @@ PARTITION BY RANGE COLUMNS(create_at) (
 -- 기존 DB에는 다음을 수동 적용:
 --   CREATE INDEX idx_rates_cur_date ON exchange_rates (cur_unit, search_date, create_at);
 CREATE INDEX idx_rates_cur_date ON exchange_rates (cur_unit, search_date, create_at);
+
+-- KRX 금시장 일별매매정보 (금 99.99 현물, 원/g)
+-- 하루 2종목(금 1kg / 미니금 100g)만 저장하므로 파티션 없이 단순 구성
+-- 기존 DB에는 아래 CREATE TABLE 문을 그대로 수동 적용
+CREATE TABLE IF NOT EXISTS gold_prices (
+    id INT UNSIGNED AUTO_INCREMENT COMMENT '고유 식별자',
+    isu_cd VARCHAR(12) NOT NULL COMMENT '종목코드 (예: 04020000 금 1kg)',
+    isu_nm VARCHAR(50) NOT NULL COMMENT '종목명 (예: 금 99.99_1kg)',
+    clsprc DECIMAL(12,2) NOT NULL COMMENT '종가 (원/g)',
+    cmpprevdd_prc DECIMAL(12,2) NOT NULL COMMENT '전일 대비',
+    fluc_rt DECIMAL(6,2) NOT NULL COMMENT '등락률 (%)',
+    opnprc DECIMAL(12,2) NOT NULL COMMENT '시가',
+    hgprc DECIMAL(12,2) NOT NULL COMMENT '고가',
+    lwprc DECIMAL(12,2) NOT NULL COMMENT '저가',
+    trdvol BIGINT UNSIGNED NOT NULL COMMENT '거래량 (g)',
+    trdval BIGINT UNSIGNED NOT NULL COMMENT '거래대금 (원)',
+    search_date DATE NOT NULL COMMENT '기준일자 (basDd)',
+    create_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '데이터 생성 시간',
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_gold_isu_date (isu_cd, search_date),
+    KEY idx_gold_isu_date (isu_cd, search_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+COMMENT='KRX 금시장 일별매매정보 저장 테이블';
