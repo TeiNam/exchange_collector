@@ -12,6 +12,8 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+# httpx 가 요청 URL(봇 토큰 포함)을 INFO 로 찍으므로 WARNING 이상만 출력
+logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
